@@ -51,8 +51,16 @@ if __name__ == '__main__':
     
 
     # ----------------------- initialize configuration ----------------------- #
+     if hasattr(args, 'device'):
+      try:
+        args.device = torch.device(args.device)
+      except Exception:
+        args.device = torch.device('cpu')
+      else:
+        args.device = torch.device('cpu')
+    
     smirk_encoder = SmirkEncoder().to(args.device)
-    checkpoint = torch.load(args.checkpoint)
+    checkpoint = torch.load(args.checkpoint, map_location=args.device)  ###LCX251108兼容CPU/GPU。
     checkpoint_encoder = {k.replace('smirk_encoder.', ''): v for k, v in checkpoint.items() if 'smirk_encoder' in k} # checkpoint includes both smirk_encoder and smirk_generator
 
     smirk_encoder.load_state_dict(checkpoint_encoder)
