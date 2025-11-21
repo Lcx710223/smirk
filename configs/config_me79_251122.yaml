@@ -1,0 +1,172 @@
+resume: false                # 不从已有模型恢复训练
+resume_path: null            # 没有指定恢复路径
+
+dataset:
+  ME79:
+    root: /content/ME79       # 数据集根目录
+    fan_dir: TXT68FAN         # 68点 landmarks TXT 文件目录
+    mp_dir: MP468JSON         # 478点 landmarks JSON 文件目录
+    train_list: /content/ME79/train_list.txt  # 训练集列表
+    val_list: /content/ME79/val_list.txt      # 验证集列表
+    test_list: /content/ME79/test_list.txt    # 测试集列表
+  ME79_percentage: 1.0        # 使用全部数据
+
+device: cuda:0                # 使用第一块 GPU (Colab T4)
+
+train:
+  log_path: /content/smirk/logs              # 日志目录
+  tensorboard_log_dir: /content/smirk/tensorboard  # TensorBoard 日志目录
+  checkpoint_dir: /content/smirk/checkpoints      # 模型保存目录
+  num_epochs: 80              # 增加到 80，保证收敛
+  resume_epoch: 0             # 从第 0 epoch 开始
+  batch_size: 16              # 提升到 16，T4 显存可承受，梯度更稳定
+  num_workers: 2              # 降低到 2，避免 Colab CPU 过载
+  samples_per_epoch: null     # 使用完整训练集，不再限制样本数
+  visualize_every: 5          # 每 5 个 epoch 可视化一次，减少 I/O
+  lr: 1.0e-4                  # 学习率提高到 1e-4，加快收敛
+  epochs: 80                  # 与 num_epochs 保持一致
+  image_size: 160             # 输入图像大小
+  train_scale_min: 1.0        # 数据增强缩放下限
+  train_scale_max: 1.1        # 数据增强缩放上限
+  test_scale: 1.0             # 测试集缩放比例
+  log_losses_every: 20        # 每 20 step 记录一次 loss，减少日志开销
+  print_freq: 50              # 每 50 step 打印一次日志
+  optimize_expression: true   # 优化表情参数
+  optimize_shape: true        # 优化形状参数
+  optimize_pose: true         # 优化姿态参数
+  Ke: 1                       # 控制正则化强度
+  freeze_encoder_in_second_path: false  # 不冻结 encoder
+  freeze_generator_in_second_path: false # 不冻结 generator
+  freeze_schedule:
+    per_iteration: true       # 每次迭代检查冻结策略
+  loss_weights:
+    emotion_loss: 1.0         # 表情损失权重
+    reconstruction_loss: 1.0  # 重建损失权重
+    perceptual_loss: 0.5      # 感知损失权重
+    mask_loss: 1.0            # mask 损失权重
+    landmark_loss: 1.0        # landmarks 损失权重
+    mica_loss: 0.0            # MICA 损失关闭
+    cycle_loss: 0.1           # 轻量循环一致性损失，稳定训练
+    adv_loss: 0.1             # 轻量对抗损失，提升生成质量
+    shape_regularization: 0.0
+    expression_regularization: 0.0
+    jaw_regularization: 0.0
+    perceptual_vgg_loss: 0.0
+  debug: false                # 不启用调试模式
+  seed: 42                    # 固定随机种子，保证可复现
+
+arch:
+  enable_fuse_generator: false
+  use_pretrained: false
+  pretrained_path: null
+  num_expression: 50          # 表情参数维度
+  num_shape: 300              # 形状参数维度。原配置为100，修改后可与DEMO的PT适配。
+  img_size: ${train.image_size}
+  generator:
+    type: generator_resnet
+    in_ch: 3
+    out_ch: 3
+    base_channels: 64
+    num_blocks: 6
+    latent_dim: 512
+    use_sync_bn: false
+    activation: relu
+    use_attention: false
+    multi_scale: false
+    texture:
+      enabled: true
+      channels: 16
+      upsample_mode: bilinear
+    dropout: 0.0
+    spectral_norm: false
+  discriminator:
+    type: patchgan
+    in_ch: 3
+    base_channels: 64
+    n_layers: 3
+    use_sigmoid: false
+    spectral_norm: false
+  encoder:
+    type: resnet18
+    pretrained: true
+    out_dim: 512
+  deformation:
+    enable: false
+    latent_dim: 256
+  mica:
+    enabled: true
+    input_size: 112
+    pretrained: false
+    model_path: null
+
+optimizer:
+  type: Adam
+  params:
+    lr: ${train.lr}           # 使用 train.lr
+    betas:
+    - 0.9
+    - 0.999
+    weight_decay: 1.0e-06
+
+scheduler:
+  type: CosineAnnealingLR     # 更适合中短期训练，平滑下降
+  params:
+    T_max: 80                 # 与 epoch 数一致
+    eta_min: 1.0e-6           # 最小学习率
+
+checkpoint:
+  enabled: true
+  save_dir: ${train.checkpoint_dir}
+  save_freq_epochs: 10        # 每 10 个 epoch 保存一次
+  resume: false
+  resume_path: null
+
+logging:
+  log_dir: ${train.log_path}
+  tensorboard_dir: ${train.tensorboard_log_dir}
+  print_freq: ${train.print_freq}
+
+training_options:
+  use_amp: true               # 混合精度训练，节省显存
+  gradient_accumulation_steps: 2 # 梯度累积，等效 batch size 32
+
+seed:
+  enable: true
+  value: ${train.seed}
+  deterministic: false
+
+normalize:
+  mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+
+augmentation:
+  color_jitter: true
+  brightness_contrast_prob: 0.5
+  rotate_limit: 10
+  shift_limit: 0.05
+  scale_limit: 0.1
+  gaussian_noise_prob: 0.5
+
+validation:
+  run_validation: true
+  val_every_n_epochs: 2       # 每 2 个 epoch 验证一次
+  val_batch_size: ${train.batch_size}
+
+early_stopping:
+  enabled: true
+  patience_epochs: 15         # 缩短耐心，避免浪费 GPU 时间
+  monitor: val_loss
+
+snapshot:
+  save_config_with_checkpoint: true
+  save_data_hash: false
+
+project:
+  name: SMIRK_ME79
+  author: LEE
