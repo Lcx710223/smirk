@@ -52,7 +52,8 @@ if __name__ == '__main__':
 
     # ----------------------- initialize configuration ----------------------- #
     smirk_encoder = SmirkEncoder().to(args.device)
-    checkpoint = torch.load(args.checkpoint)
+    ### LCX251130 修改： checkpoint = torch.load(args.checkpoint)
+    checkpoint = torch.load(args.checkpoint, map_location=torch.device('cpu'))
     checkpoint_encoder = {k.replace('smirk_encoder.', ''): v for k, v in checkpoint.items() if 'smirk_encoder' in k} # checkpoint includes both smirk_encoder and smirk_generator
 
     smirk_encoder.load_state_dict(checkpoint_encoder)
