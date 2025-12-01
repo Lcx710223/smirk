@@ -9,7 +9,7 @@ deterministic: False
 train:
 
   lr: 1e-3
-  num_epochs: 50
+  num_epochs: 500
   batch_size: 32
   num_workers: 8
   log_path: logs/1
