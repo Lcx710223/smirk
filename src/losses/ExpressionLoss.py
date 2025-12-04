@@ -10,8 +10,6 @@ class ExpressionLoss(nn.Module):
         # 初始化 backbone
         self.backbone = resnet50(num_classes=100, include_top=False, emoca_specific=True).eval()
         self.backbone = self.backbone.to(self.device)
-
-        # 加载权重
         # 加载权重
         emotion_checkpoint = torch.load(
             'assets/ResNet50/checkpoints/deca-epoch=01-val_loss_total/dataloader_idx_0=1.27607644.ckpt',
