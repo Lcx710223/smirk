@@ -1,4 +1,4 @@
-### 本配置适配 : 早期22-50EPOCH
+### 本配置适配 : 早期22-45EPOCH
 ### 冻结STEP2,避免震荡。CYCLE LOSS置0。
 
 resume: /content/model_22.pt
@@ -76,4 +76,5 @@ dataset:
     img_dir: IMAGES
     txt_dir: FAN68TXT
     json_dir: MP468JSON
+
 
