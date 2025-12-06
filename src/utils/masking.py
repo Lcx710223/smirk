@@ -105,7 +105,7 @@ def masking(img, mask, extra_points, wr=15, rendered_mask=None, extra_noise=True
     return masked_img
 
 
-
+# 将归一化坐标点转换为图像像素索引：
 def point2ind(npoints, H):
     
     npoints = npoints * (H // 2) + H // 2
@@ -115,7 +115,7 @@ def point2ind(npoints, H):
     
     return npoints
 
-
+# 在三角形面片内部采样点（通过随机重心坐标），这些点的颜色要从原图提取并放到一个新的张量中。这样就能得到稀疏点云的颜色信息，用于训练或可视化。
 def transfer_pixels(img, points1, points2, rbound=None):
 
     B, C, H, W = img.size()
@@ -131,7 +131,7 @@ def transfer_pixels(img, points1, points2, rbound=None):
 
     return retained_pixels
 
-
+# 输入：FLAME 网格顶点、面片索引、面片采样概率、掩码比例、可选的坐标、图像大小。 输出：采样点的图像坐标，以及采样时的面片索引与重心坐标。功能：根据面片概率和掩码比例，从 FLAME 网格中采样点，用于生成掩码。
 def mesh_based_mask_uniform_faces(flame_trans_verts, flame_faces, face_probabilities, mask_ratio=0.1, coords=None, IMAGE_SIZE=224):
     """
     This function samples points from the FLAME mesh based on the face probabilities and the mask ratio.
@@ -139,46 +139,48 @@ def mesh_based_mask_uniform_faces(flame_trans_verts, flame_faces, face_probabili
     batch_size = flame_trans_verts.size(0)
     DEVICE = flame_trans_verts.device
 
-    # if mask_ratio is single value, then use it as a ratio of the image size
+    # if mask_ratio is single value, then use it as a ratio of the image size / 如果mask_ratio是单一值，则将其作为图像尺寸的比例使用 / 计算每个样本需要采样的点数 num_points_to_sample。
     num_points_to_sample = int(mask_ratio * IMAGE_SIZE * IMAGE_SIZE)
-
+    # 将面片索引扩展到批维度，使每个样本共享相同的网格结构：
     flame_faces_expanded = flame_faces.expand(batch_size, -1, -1)
 
     if coords is None:
-        # calculate face normals
+        # calculate face normals / 计算顶点法线并映射到面片 / 取 z 分量的平均值作为面片朝向 / 将面片概率扩展到批维度：
         transformed_normals = vertex_normals(flame_trans_verts, flame_faces_expanded) 
         transformed_face_normals = face_vertices(transformed_normals, flame_faces_expanded)
         transformed_face_normals = transformed_face_normals[:,:,:,2].mean(dim=-1)
         face_probabilities = face_probabilities.repeat(batch_size,1).to(flame_trans_verts.device)
 
-        # # where the face normals are negative, set probability to 0
+        # where the face normals are negative, set probability to 0 / 如果面片法线 z 分量小于阈值（朝外或不可见），则将该面片的采样概率置为 0。
         face_probabilities = torch.where(transformed_face_normals < 0.05, face_probabilities, torch.zeros_like(transformed_face_normals).to(DEVICE))
         # face_probabilities = torch.where(transformed_face_normals > 0, torch.ones_like(transformed_face_normals).to(flame_trans_verts.device), face_probabilities)
 
-        # calculate xy area of faces and scale the probabilities by it
+        # calculate xy area of faces and scale the probabilities by it / 计算面片在 xy 平面的投影面积。用面积对采样概率加权，使大面片更容易被采样。
         fv = face_vertices(flame_trans_verts, flame_faces_expanded)
         xy_area = triangle_area(fv)
-
         face_probabilities = face_probabilities * xy_area
 
-
+        # 采样面片与生成重心坐标,按概率分布采样面片索引,为每个采样点生成随机重心坐标，保证点落在面片内部。
         sampled_faces_indices = torch.multinomial(face_probabilities, num_points_to_sample, replacement=True).to(DEVICE)
 
         barycentric_coords = random_barycentric(num=batch_size*num_points_to_sample).to(DEVICE)
         barycentric_coords = barycentric_coords.view(batch_size, num_points_to_sample, 3)
+
     else:
-        sampled_faces_indices = coords['sampled_faces_indices']
+        sampled_faces_indices = coords['sampled_faces_indices']  # 如果提供了 coords，直接使用已有的面片索引和重心坐标，保证采样可重复。
         barycentric_coords = coords['barycentric_coords']
 
+    # 使用重心坐标在面片顶点间插值，得到采样点的归一化坐标。
     npoints = vertices2landmarks(flame_trans_verts, flame_faces, sampled_faces_indices, barycentric_coords)
-
+    
+    # 坐标映射到图像空间:
     npoints = .5 * (1 + npoints) * IMAGE_SIZE
     npoints = npoints.long()
     npoints[...,1] = torch.clamp(npoints[..., 1], 0, IMAGE_SIZE-1)
     npoints[...,0] = torch.clamp(npoints[..., 0], 0, IMAGE_SIZE-1)
 
     #mask = torch.zeros((flame_output['trans_verts'].size(0), 1, self.config.image_size, self.config.image_size)).to(flame_output['trans_verts'].device)
-
     #mask[torch.arange(batch_size).unsqueeze(-1), :, npoints[..., 1], npoints[..., 0]] = 1        
 
+    # 返回采样点的图像坐标。返回采样时的面片索引与重心坐标字典，便于复用或调试:
     return npoints, {'sampled_faces_indices':sampled_faces_indices, 'barycentric_coords':barycentric_coords}
