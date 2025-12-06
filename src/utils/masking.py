@@ -74,30 +74,33 @@ def masking(img, mask, extra_points, wr=15, rendered_mask=None, extra_noise=True
     
     B, C, H, W = img.size()
     
-    # dilate face mask, drawn from convex hull of face landmarks
+    # dilate face mask, drawn from convex hull of face landmarks / 膨胀人脸掩码，该掩码由人脸关键点的凸包生成。
     mask = 1-F.max_pool2d(1-mask, 2 * wr + 1, stride=1, padding=wr)
     
-    # optionally remove the rendered mask 
+    # optionally remove the rendered mask / 可选地移除渲染掩码,避免重复遮挡。
     if rendered_mask is not None:
         mask = mask * (1 - rendered_mask) 
 
+    # 将图像与掩码逐元素相乘，得到初步遮挡后的图像:
     masked_img = img * mask
-    # add noise to extra in-face points
+    
+    # add noise to extra in-face points / 将噪声乘到 extra_points 上，使采样点的像素值有轻微扰动，增加随机性和鲁棒性:
     if extra_noise:
         # normal around 1 with std 0.1
         noise_mult = torch.randn(extra_points.shape).to(img.device) * 0.05 + 1
         extra_points = extra_points * noise_mult
 
-    # select random_mask percentage of pixels as centers to crop out 11x11 patches 
+    # select random_mask percentage of pixels as centers to crop out 11x11 patches / 随机选择一定比例的像素作为遮挡中心
     if random_mask > 0:
         random_mask = torch.bernoulli(torch.ones((B, 1, H, W)) * random_mask).to(img.device)
-        # dilate the mask to have 11x11 patches
+        # dilate the mask to have 11x11 patches / 使用池化膨胀成 11×11 的小块遮挡区域。
         random_mask = 1 - F.max_pool2d(random_mask, 11, stride=1, padding=5)
+        extra_points = extra_points * random_mask # 将这些区域应用到extra_points，进一步随机化采样点分布。
 
-        extra_points = extra_points * random_mask
-
+    # 在遮挡图像中，把 extra_points 的非零位置写入，替换原有像素值。这样采样点的颜色信息被保留在最终图像中：
     masked_img[extra_points > 0] = extra_points[extra_points > 0]
 
+    # 将结果张量从计算图中分离（不参与梯度回传），返回最终的遮挡图像：
     masked_img = masked_img.detach()
     return masked_img
 
