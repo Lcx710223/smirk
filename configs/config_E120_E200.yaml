@@ -1,4 +1,4 @@
-### 本配置适配 : LCX251212 中期EPOCH 120-200 共修改4点。
+### 本配置适配 : LCX251212 中期EPOCH 120-200。
 ### 冻结STEP2,避免震荡。CYCLE LOSS置0。
 
 resume: /content/model_120.pt  ### 1:恢复路径
@@ -14,7 +14,7 @@ train:
   num_epochs: 350
   batch_size: 32
   num_workers: 8
-  checkpoint: pretrained_models/SMIRK_em1.pt   # 用来接收命令行传入的预训练模型的路径。
+  checkpoint: pretrained_models/SMIRK_em1.pt
 
   log_path: logs/2
   log_losses_every: 12
@@ -41,7 +41,7 @@ train:
     emotion_loss: 0.0  # extra emotion loss weight 
     jaw_regularization: 2.0 ### EPOCH0-40为3,E40-120=3,E120-200=2,E200-300=1,E300-350=0.5 原来定的0.1几乎没有约束作用。
     expression_regularization: 1e-2
-    shape_regularization: 100  ### 40E之前200,40-120E为100，E120-200为50,E200-300为30,E300-350为15。
+    shape_regularization: 100  ### 40E之前200,40-120E为150,E120-200为100,E200-300为50,E300-350为30。
     cycle_loss: 0
     mica_loss: 0
 
