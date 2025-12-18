@@ -69,10 +69,10 @@ render:
 # 把数据集直接从谷歌云盘引用：
 dataset:
   ME79:
-    root: /content/drive/MyDrive/SMIRT@LCX20251108/A42
-    train_list: /content/drive/MyDrive/SMIRT@LCX20251108/A42/train_list.txt
-    val_list: /content/drive/MyDrive/SMIRT@LCX20251108/A42/val_list.txt
-    test_list: /content/drive/MyDrive/SMIRT@LCX20251108/A42/test_list.txt
+    root: /content/drive/MyDrive/SMIRT@LCX20251108/ME97
+    train_list: /content/drive/MyDrive/SMIRT@LCX20251108/ME97/train_list.txt
+    val_list: /content/drive/MyDrive/SMIRT@LCX20251108/ME97/val_list.txt
+    test_list: /content/drive/MyDrive/SMIRT@LCX20251108/ME97/test_list.txt
     img_dir: IMAGES
     txt_dir: FAN68TXT
     json_dir: MP468JSON
