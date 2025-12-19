@@ -70,7 +70,7 @@ render:
 dataset:
   ME79:
     root: /content/drive/MyDrive/SMIRT@LCX20251108/ME79
-    train_list: /content/drive/MyDrive/SMIRT@LCX20251108/ME797/train_list.txt
+    train_list: /content/drive/MyDrive/SMIRT@LCX20251108/ME79/train_list.txt
     val_list: /content/drive/MyDrive/SMIRT@LCX20251108/ME79/val_list.txt
     test_list: /content/drive/MyDrive/SMIRT@LCX20251108/ME79/test_list.txt
     img_dir: IMAGES
