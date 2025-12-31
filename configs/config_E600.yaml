@@ -1,4 +1,4 @@
-### LCX20251231 EPOCH600+
+### LCX20251231 FOR EPOCH600+
 
 resume: /content/model_599.pt
 load_encoder: true
