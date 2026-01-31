@@ -14,7 +14,6 @@ echo -e "\nDownloading FLAME..."
 mkdir -p data/FLAME2020/
 wget --post-data "username=$username&password=$password" 'https://download.is.tue.mpg.de/download.php?domain=flame&sfile=FLAME2020.zip&resume=1' -O './FLAME2020.zip' --no-check-certificate --continue
 unzip FLAME2020.zip -d assets
-rm FLAME2020.zip
 
 echo -e "\nDownloading Mediapipe Face Mesh model..."
 wget https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task --directory-prefix assets/
@@ -25,7 +24,6 @@ mkdir -p pretrained_models/
 gdown --id 1T65uEd9dVLHgVw5KiUYL66NUee-MCzoE -O pretrained_models/
 
 
-
 # The rest of the files are needed for training
 echo -e "\n Now downloading the files needed if you want to train SMIRK..."
 
@@ -33,7 +31,7 @@ echo -e "\n Now downloading the files needed if you want to train SMIRK..."
 echo -e "\nDownload expression templates for SMIRK training..."
 gdown --id 1wEL7KPHw2kl5DxP0UAB3h9QcQLXk7BM_
 unzip -q expression_templates_famos.zip -d assets/
-rm expression_templates_famos.zip
+
 
 # Download EMOCA for expression loss
 echo "To download the Emotion Recognition from EMOCA which is used from SMIRK for expression loss, please register at:",
@@ -49,7 +47,7 @@ done
 
 wget https://download.is.tue.mpg.de/emoca/assets/EmotionRecognition/image_based_networks/ResNet50.zip -O ResNet50.zip
 unzip ResNet50.zip -d assets/
-rm ResNet50.zip
+
 
 # Download MICA
 echo -e "\nDownloading MICA..."
