@@ -107,11 +107,12 @@ class Renderer(nn.Module):
             transformed_landmarks[key][:, :, 1:] = - transformed_landmarks[key][:, :, 1:]
             transformed_landmarks[key] = transformed_landmarks[key][...,:2]
 
-        rendered_img = self.render(vertices, transformed_vertices)
+        rendered_img,pix_to_face = self.render(vertices, transformed_vertices)
 
         outputs = {
             'rendered_img': rendered_img,
-            'transformed_vertices': transformed_vertices
+            'transformed_vertices': transformed_vertices,
+            'pix_to_face': pix_to_face,
         }
         outputs.update(transformed_landmarks)
 
@@ -152,8 +153,8 @@ class Renderer(nn.Module):
         attributes = torch.cat([colors,
                                 face_normals], 
                                 -1)
-        # rasterize
-        rendering = self.rasterize(transformed_vertices, self.faces.expand(batch_size, -1, -1), attributes)
+        # rasterize  LCX260204增加返回PIX2FACE:
+        rendering, pix_to_face = self.rasterize(transformed_vertices, self.faces.expand(batch_size, -1, -1), attributes)
         
         albedo_images = rendering[:, :3, :, :]
 
@@ -165,23 +166,30 @@ class Renderer(nn.Module):
         shading_images = shading.reshape([batch_size, albedo_images.shape[2], albedo_images.shape[3], 3]).permute(0,3,1,2).contiguous()        
         shaded_images = albedo_images*shading_images
         
-        return shaded_images
+        return shaded_images, pix_to_face
 
 
     def rasterize(self, vertices, faces, attributes=None, h=None, w=None):
         fixed_vertices = vertices.clone()
-        fixed_vertices[...,:2] = -fixed_vertices[...,:2]
+        fixed_vertices[..., :2] = -fixed_vertices[..., :2]
 
+        # -----------------------------
+        # 1. 处理 image_size
+        # -----------------------------
         if h is None and w is None:
             image_size = self.image_size
         else:
             image_size = [h, w]
-            if h>w:
-                fixed_vertices[..., 1] = fixed_vertices[..., 1]*h/w
+            if h > w:
+                fixed_vertices[..., 1] = fixed_vertices[..., 1] * h / w
             else:
-                fixed_vertices[..., 0] = fixed_vertices[..., 0]*w/h
-            
+                fixed_vertices[..., 0] = fixed_vertices[..., 0] * w / h
+
+        # -----------------------------
+        # 2. 调用 PyTorch3D rasterizer
+        # -----------------------------
         meshes_screen = Meshes(verts=fixed_vertices.float(), faces=faces.long())
+
         pix_to_face, zbuf, bary_coords, dists = rasterize_meshes(
             meshes_screen,
             image_size=image_size,
@@ -191,20 +199,52 @@ class Renderer(nn.Module):
             max_faces_per_bin=None,
             perspective_correct=False,
         )
-        vismask = (pix_to_face > -1).float()
+
+        # -----------------------------
+        # 3. vismask：真正的可见性
+        # -----------------------------
+        vismask = (pix_to_face > -1).float()   # (B,H,W,1)
+
+        # -----------------------------
+        # 4. 为 gather() 构造 safe_pix
+        #    - 原始 pix_to_face 保留 -1
+        #    - safe_pix 把 -1 替换成 0，仅用于 gather
+        # -----------------------------
+        mask = (pix_to_face == -1)
+        safe_pix = pix_to_face.clone()
+        safe_pix[mask] = 0     # 仅用于 gather，不影响 pix_to_face 本体
+
+        # -----------------------------
+        # 5. gather attributes
+        # -----------------------------
         D = attributes.shape[-1]
-        attributes = attributes.clone(); attributes = attributes.view(attributes.shape[0]*attributes.shape[1], 3, attributes.shape[-1])
+        attributes = attributes.clone()
+        attributes = attributes.view(attributes.shape[0] * attributes.shape[1], 3, D)
+
         N, H, W, K, _ = bary_coords.shape
-        mask = pix_to_face == -1
-        pix_to_face = pix_to_face.clone()
-        pix_to_face[mask] = 0
-        idx = pix_to_face.view(N * H * W * K, 1, 1).expand(N * H * W * K, 3, D)
+
+        idx = safe_pix.view(N * H * W * K, 1, 1).expand(N * H * W * K, 3, D)
         pixel_face_vals = attributes.gather(0, idx).view(N, H, W, K, 3, D)
+
         pixel_vals = (bary_coords[..., None] * pixel_face_vals).sum(dim=-2)
-        pixel_vals[mask] = 0  # Replace masked values in output.
-        pixel_vals = pixel_vals[:,:,:,0].permute(0,3,1,2)
-        pixel_vals = torch.cat([pixel_vals, vismask[:,:,:,0][:,None,:,:]], dim=1)
-        return pixel_vals
+
+        # -----------------------------
+        # 6. 对真正无效像素（pix_to_face == -1）置零
+        # -----------------------------
+        pixel_vals[mask] = 0
+
+        # -----------------------------
+        # 7. 输出格式整理
+        # -----------------------------
+        pixel_vals = pixel_vals[:, :, :, 0].permute(0, 3, 1, 2)  # (B, D, H, W)
+
+        # 拼上 vismask（作为最后一通道）
+        pixel_vals = torch.cat([pixel_vals, vismask[:, :, :, 0][:, None, :, :]], dim=1)
+
+        # -----------------------------
+        # 8. 返回 pixel_vals + 原始 pix_to_face（含 -1）
+        # -----------------------------
+        return pixel_vals, pix_to_face
 
     def add_SHlight(self, normal_images, sh_coeff):
         '''
